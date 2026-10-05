@@ -23,6 +23,7 @@ EXCLUDE_URL_RE = re.compile(r"likers|/comments|/info/|reels_media|reels_tray", r
 VIEWER_PATH_RE = re.compile(r"viewer", re.I)
 ITEMS_PATH_RE = re.compile(r"\.items(\[|$)")  # story-item arrays carry the owner as `user`, not viewers
 CORE_KEYS = {"pk", "pk_id", "id", "username", "full_name", "strong_id__"}
+LIKE_KEYS = ("has_liked", "liked", "has_liked_story", "is_liked")  # per-viewer like flag; update if Instagram renames it
 
 
 @dataclass
@@ -153,6 +154,22 @@ def merge_pages(pages: list[ViewerPage]) -> list[Viewer]:
                 seen.add(v.user_id)
                 out.append(v)
     return out
+
+
+def like_flag(extra: dict | None) -> bool | None:
+    """Whether this viewer liked the story; None if the entry carries no like field."""
+    for k in LIKE_KEYS:
+        if k in (extra or {}):
+            return bool(extra[k])
+    return None
+
+
+def liked_set(entries) -> set[str] | None:
+    """User ids who liked, from (user_id, extra) pairs; None when no entry has like data at all."""
+    flags = [(u, like_flag(extra)) for u, extra in entries]
+    if all(f is None for _, f in flags):
+        return None
+    return {u for u, f in flags if f}
 
 
 def media_pk_from(url: str, post_data: str | None = None) -> str | None:

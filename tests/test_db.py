@@ -99,3 +99,24 @@ def test_reparse_from_raw(conn, tmp_path, fixture):
     snaps = db.snapshots_for(conn, ITEM)
     assert [s["source"] for s in snaps] == ["api", "dom"]
     assert db.snapshot_user_ids(conn, snaps[1]["id"])[0] == "1005"  # DOM username mapped back to its id
+
+
+def test_migrate_v1_to_v2_keeps_events():
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    c.executescript(f"CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES (1); {db.MIGRATIONS[0]}")
+    c.execute("INSERT INTO events(story_item_id, user_id) VALUES ('s', 'u')")
+    assert db.migrate(c) == 2
+    assert c.execute("SELECT liked FROM events").fetchone()[0] == 0
+
+
+def test_ingest_like_data_end_to_end(conn):
+    acfg = Config().analysis
+    v = lambda n, liked: Viewer(f"id_{n}", n, extra={"has_liked": liked})
+    likers, non = list("ABC"), list("abcdefghij")
+    prev = [v(n, True) for n in likers] + [v(n, False) for n in non]
+    cur = [v("e", True)] + [v(n, True) for n in likers] + [v(n, False) for n in non if n != "e"]
+    scheduler.ingest(conn, acfg, ITEM, "2026-10-05T10:00:00+00:00", prev, "api")
+    scheduler.ingest(conn, acfg, ITEM, "2026-10-05T10:30:00+00:00", cur, "api")
+    ev = conn.execute("SELECT user_id, confidence, liked FROM events").fetchall()
+    assert [tuple(e) for e in ev] == [("id_e", "high", 1)]

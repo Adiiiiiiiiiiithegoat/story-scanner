@@ -29,7 +29,9 @@ def ingest(conn, acfg, item_id: str, taken_at: str, viewers: list[Viewer], sourc
     if not prev:
         return sid
     res = analysis.compare(prev["user_ids"], [v.user_id for v in viewers], acfg,
-                           dom="dom" in (source, prev["source"]))
+                           dom="dom" in (source, prev["source"]),
+                           liked_prev=parser.liked_set(zip(prev["user_ids"], prev["extras"])),
+                           liked_cur=parser.liked_set((v.user_id, v.extra) for v in viewers))
     db.set_analysis(conn, sid, res.score, res.is_reshuffle)
     db.insert_events(conn, item_id, sid, res.events, taken_at)
     rho = "n/a" if res.score is None else f"{res.score:.2f}"

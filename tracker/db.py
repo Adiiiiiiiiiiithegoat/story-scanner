@@ -27,6 +27,8 @@ MIGRATIONS = [
     CREATE INDEX idx_events_story ON events(story_item_id);
     CREATE INDEX idx_events_user ON events(user_id);
     """,
+    # v2: event came from a new like rather than rank movement
+    "ALTER TABLE events ADD COLUMN liked INTEGER NOT NULL DEFAULT 0",
 ]
 
 
@@ -93,7 +95,9 @@ def last_snapshot(conn, item_id: str, before_id: int | None = None) -> dict | No
         (item_id, before_id if before_id is not None else 2**62)).fetchone()
     if not row:
         return None
-    return {"id": row["id"], "source": row["source"], "user_ids": snapshot_user_ids(conn, row["id"])}
+    rows = conn.execute("SELECT user_id, extra_json FROM snapshot_viewers WHERE snapshot_id = ? ORDER BY rank", (row["id"],)).fetchall()
+    return {"id": row["id"], "source": row["source"], "user_ids": [r[0] for r in rows],
+            "extras": [json.loads(r[1]) if r[1] else {} for r in rows]}
 
 
 def snapshot_user_ids(conn, sid: int) -> list[str]:
@@ -108,9 +112,10 @@ def set_analysis(conn, sid: int, score: float | None, is_reshuffle: bool) -> Non
 def insert_events(conn, item_id: str, sid: int, events, created_at: str) -> None:
     with conn:
         conn.executemany(
-            "INSERT INTO events(story_item_id, user_id, snapshot_id, prev_rank, new_rank, jump, confidence, reason, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
-            [(item_id, e.user_id, sid, e.prev_rank, e.new_rank, e.jump, e.confidence, e.reason, created_at) for e in events])
+            "INSERT INTO events(story_item_id, user_id, snapshot_id, prev_rank, new_rank, jump, confidence, reason, created_at, liked)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            [(item_id, e.user_id, sid, e.prev_rank, e.new_rank, e.jump, e.confidence, e.reason, created_at, int(e.liked))
+             for e in events])
 
 
 def user_id_for_username(conn, username: str) -> str | None:

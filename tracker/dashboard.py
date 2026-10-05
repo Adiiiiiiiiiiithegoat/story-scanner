@@ -36,7 +36,7 @@ def build(conn, cfg) -> dict:
             by_user.setdefault(e["user_id"], []).append({
                 "t": fmt(snaps[idx[e["snapshot_id"]]]["taken_at"]), "i": idx[e["snapshot_id"]],
                 "prev": e["prev_rank"], "new": e["new_rank"], "jump": e["jump"],
-                "confidence": e["confidence"], "reason": e["reason"]})
+                "confidence": e["confidence"], "reason": e["reason"], "liked": bool(e["liked"])})
         viewers = [{
             "user_id": u, "username": names.get(u, u),
             "first_seen": fmt(s["first_seen"]), "first_seen_ts": _ts(s["first_seen"]),

@@ -60,7 +60,18 @@ Exit codes: `0` ok, `1` login failed or timed out, `2` safety stop.
 
 ## How the analysis works (and its limits)
 
-Each snapshot is compared with the previous snapshot of the **same item** (`tracker/analysis.py`, pure functions):
+Each snapshot is compared with the previous snapshot of the **same item** (`tracker/analysis.py`, pure functions).
+
+**Likes split the list into two blocks.** Instagram puts everyone who liked the story at the top, then everyone else. Each block is ordered by most recent view:
+
+- A **non-liker who rewatches** moves to the top of the non-liker block, just under the oldest liker. That can be well below the top of the full list.
+- A **liker who rewatches** moves to the top of the whole list.
+
+So when the viewer data has a like flag (`has_liked`), the steps below run **separately on each block**. A non-liker rewatch is caught no matter how many likers sit above it.
+
+**A new like from someone who had already viewed is its own event.** A like happens while viewing, so they must have reopened the story. This is recorded as a high-confidence possible rewatch (marked ♥ on the dashboard). It doesn't depend on ordering, so it's kept even when the pair is a reshuffle. A brand-new viewer who likes is still a first view.
+
+Steps (per block, or on the whole list when there's no like data):
 
 1. **New viewers** (only in the new snapshot) are first views. They never produce events.
 2. **Expected drift:** each returning viewer's previous rank is shifted by the number of new viewers now above them, so normal push-down isn't counted as movement. `jump = adjusted_prev_rank − new_rank` (positive = moved up).
@@ -88,7 +99,9 @@ Deviations from a literal reading of the spec, chosen so short lists behave sens
 **Known false positives:**
 
 - Instagram's own interaction/closeness ranking on bigger lists. Big reshuffles are caught; small partial re-ranks aren't.
-- Someone replying, reacting or liking the story.
+- Someone replying or reacting through DMs. That isn't visible in the viewer data.
+- Missing like data. If a snapshot has no like flag (the DOM fallback, or Instagram renaming the field), the whole list is compared as one block. A non-liker rewatch that lands under many likers can then be missed.
+- A viewer whose first view and like happen exactly as a snapshot is taken can show up as a like event. This is unlikely with 30-minute polling.
 - Instagram A/B tests that change how the list is ordered.
 - An early-stopped capture that makes deep-list viewers "vanish" and "reappear".
 
@@ -153,6 +166,7 @@ Click a viewer to see their rank over time. Reshuffle snapshots are grey and fla
 - **`check` says not logged in, or a safety stop says "login form shown":** run `python -m tracker login` again. Use the same browser each time: with `browser_channel = "chrome"`, don't switch to `""` later, because the profile may not carry over.
 - **"'Seen by' opener not found":** Instagram changed the UI. Run with `headless = false` to watch, then update the constants block at the top of `tracker/capture.py` (`SEEN_BY_RE`, `SEEN_BY_CSS`, `VIEW_STORY_RE`).
 - **No viewer responses captured (DOM fallback warnings):** the endpoint or shape changed. Open DevTools → Network in a normal browser, open your viewer list, and find the response carrying the viewer users. Add its URL fragment to `URL_PATTERNS` in `tracker/parser.py`, then run `reparse`. `data/logs/tracker.log` logs which pattern matched for every captured page.
+- **Likes not detected (no ♥ events, liker block ignored):** look in a raw capture for the per-viewer like field and add its name to `LIKE_KEYS` in `tracker/parser.py`, then run `reparse`.
 - **Story listing fails:** set `username` in `config.toml` to enable the page-sniffing fallback, and check `REELS_MEDIA_PATH` / `IG_APP_ID` in `capture.py`.
 - **Re-parsing:** every matched response is in `data/raw/` as `{"taken_at", "source", "url", "pattern", "body"}`. Fix `parser.py`, then run `python -m tracker reparse`. It rebuilds snapshots and events (stories and viewers are kept) and re-renders the report.
 - **Headless gets challenged more than headed:** set `headless = false`. A window will open briefly each cycle.

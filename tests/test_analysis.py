@@ -61,3 +61,46 @@ def test_summarize():
     assert s["b"]["first_seen"] == "t1" and s["c"]["first_seen"] == "t2"
     assert s["b"]["best_rank"] == 0 and s["b"]["latest_rank"] == 0 and s["a"]["latest_rank"] == 2
     assert (s["b"]["high"], s["b"]["low"]) == (1, 1) and s["b"]["score"] == pytest.approx(1.3)
+
+
+# --- like blocks: likers sit on top, each block ordered by latest view -----------------------------
+LIKERS = [f"L{i}" for i in range(1, 9)]
+NON = [f"n{i}" for i in range(1, 13)]
+
+
+def test_non_liker_rewatch_under_many_likers():
+    prev = LIKERS + NON
+    cur = LIKERS + ["n10"] + [u for u in NON if u != "n10"]  # n10 jumps to just under the likers
+    assert compare(prev, cur, C).events == []  # without like data it lands at #9: outside the top zone
+    res = compare(prev, cur, C, liked_prev=set(LIKERS), liked_cur=set(LIKERS))
+    assert [(e.user_id, e.confidence, e.prev_rank, e.new_rank, e.liked) for e in res.events] == [("n10", "high", 17, 8, False)]
+    assert "non-liker block" in res.events[0].reason
+
+
+def test_liker_rewatch_goes_to_top_of_liker_block():
+    prev = LIKERS + NON
+    cur = ["L5"] + [u for u in LIKERS if u != "L5"] + NON
+    res = compare(prev, cur, C, liked_prev=set(LIKERS), liked_cur=set(LIKERS))
+    assert [(e.user_id, e.confidence) for e in res.events] == [("L5", "medium")]
+
+
+def test_new_like_from_existing_viewer_is_a_rewatch():
+    prev = LIKERS + NON
+    cur = ["n7"] + LIKERS + [u for u in NON if u != "n7"]
+    res = compare(prev, cur, C, liked_prev=set(LIKERS), liked_cur=set(LIKERS) | {"n7"})
+    assert [(e.user_id, e.confidence, e.liked) for e in res.events] == [("n7", "high", True)]
+
+
+def test_new_viewer_who_likes_is_a_first_view():
+    prev = LIKERS + NON
+    cur = ["x"] + LIKERS + NON
+    res = compare(prev, cur, C, liked_prev=set(LIKERS), liked_cur=set(LIKERS) | {"x"})
+    assert res.events == [] and res.new_viewers == ["x"]
+
+
+def test_new_like_kept_even_when_reshuffled():
+    prev = LIKERS + NON
+    rest = [u for u in NON if u != "n7"]
+    cur = ["n7"] + LIKERS + rest[::-1]  # non-liker block fully reversed
+    res = compare(prev, cur, C, liked_prev=set(LIKERS), liked_cur=set(LIKERS) | {"n7"})
+    assert res.is_reshuffle and [(e.user_id, e.liked) for e in res.events] == [("n7", True)]

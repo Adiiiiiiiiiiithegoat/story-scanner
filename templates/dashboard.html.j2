@@ -146,7 +146,7 @@ select{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(
   }
   function viewerDetail(story) {
     return v => el("div", null, chart(story, v), v.events.length
-      ? el("ul", {class: "ev"}, v.events.map(e => el("li", null, el("span", {class: "badge c-" + e.confidence}, e.confidence), " ", e.t, ": ", e.reason)))
+      ? el("ul", {class: "ev"}, v.events.map(e => el("li", null, el("span", {class: "badge c-" + e.confidence}, e.confidence), e.liked ? " ♥" : "", " ", e.t, ": ", e.reason)))
       : el("div", {class: "empty"}, "No possible rewatches flagged."));
   }
 
