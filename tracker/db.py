@@ -142,6 +142,11 @@ def events_for(conn, item_id: str):
     return conn.execute("SELECT * FROM events WHERE story_item_id = ? ORDER BY snapshot_id, new_rank", (item_id,)).fetchall()
 
 
+def last_snapshot_time(conn) -> datetime | None:
+    row = conn.execute("SELECT MAX(taken_at) FROM snapshots").fetchone()
+    return datetime.fromisoformat(row[0]) if row and row[0] else None
+
+
 def viewer_names(conn) -> dict[str, str]:
     return {r[0]: r[1] for r in conn.execute("SELECT user_id, username FROM viewers")}
 

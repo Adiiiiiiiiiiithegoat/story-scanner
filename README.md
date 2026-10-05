@@ -40,7 +40,9 @@ python -m tracker check          # confirms the session and lists your live stor
 | `export --csv` | Writes `stories`, `viewers`, `snapshots`, `snapshot_viewers` and `events` to `data/export/*.csv` (UTF-8 with BOM, so Excel opens it cleanly). |
 | `reparse` | Rebuilds every snapshot and event from `data/raw/`, for example after a parser fix. |
 
-Exit codes: `0` ok, `1` login failed or timed out, `2` safety stop.
+Exit codes: `0` ok, `1` error (login failed or timed out, etc.), `2` safety stop, `3` no saved session (run `login`), `4` another tracker command is already running.
+
+`login`, `check`, `snapshot` and `run` share the browser profile, so only one can run at a time. An OS-level lock on `data/tracker.lock` enforces this and is released even if the process is killed. This also stops `start.bat` and the scheduled task from polling at the same time.
 
 ## How capture works
 
@@ -77,12 +79,12 @@ Steps (per block, or on the whole list when there's no like data):
 2. **Expected drift:** each returning viewer's previous rank is shifted by the number of new viewers now above them, so normal push-down isn't counted as movement. `jump = adjusted_prev_rank − new_rank` (positive = moved up).
 3. **Reshuffle check:** Spearman ρ is computed between the two orders over returning viewers. The pair counts as a reshuffle, with the snapshot flagged and **no** events, if either:
    - ρ < 0.6
-   - more than 30% of returning viewers moved more than 3 places (and at least 3 did)
+   - more than 30% of the stable viewers moved more than 3 places relative to each other (and at least 3 did). "Stable" means everyone except this round's jumpers. Several rewatchers jumping to the top push everyone they pass down by that many places; that's expected and doesn't count.
 
    The score is stored either way.
 4. **Flag rule:** a possible rewatch needs all of these:
    - jump ≥ max(3, 10% of the list)
-   - the viewer lands in the top zone (top 5, or top 10% for lists over 50)
+   - the viewer lands in the top zone (top 5, or top 10% for lists over 50). Only returning viewers above them count here, so first-time viewers who arrived after the rewatch don't push it out
    - the viewer was *not* already in the top zone
 5. **Confidence:**
    - **high**: lands in the top 3, jump ≥ 2× the minimum, ρ ≥ 0.85, and at most 2 viewers jumped in that pair
@@ -117,8 +119,17 @@ All thresholds are in `[analysis]` in `config.toml`. Rules of thumb:
 
 After changing thresholds, run `python -m tracker reparse` to recompute every event from the raw captures.
 
+### How well it works (simulation)
+
+`tests/test_simulation.py` replays simulated stories using the ordering above: likers on top, each block by latest view, with ~300 viewers and 40 cycles.
+
+- **No noise:** no false flags. About 80% of rewatches are caught. Almost all misses are viewers already at or near the top of their block, where a rewatch barely moves them.
+- **Without like data:** only about 20% are caught.
+- **With noise** (random small reorders, plus occasional full reshuffles of the non-liker block): over 97% of flags are real, and over 90% of reshuffles are detected.
+
 ## Scheduler (`run`)
 
+- On start, if the last capture was under 15 minutes ago, it waits until 15 minutes have passed. Restarting can't bypass the minimum interval.
 - Every cycle checks the session and lists live items. With no live story it sleeps 120 ± 15 min. With a live story it captures every item, then sleeps 30 ± 7 min, never less than 15.
 - Nothing runs during quiet hours (default 02:00–07:00 IST).
 - Expired items (past `expiring_at`, or no longer returned) are no longer captured.
@@ -168,6 +179,8 @@ Click a viewer to see their rank over time. Reshuffle snapshots are grey and fla
 - **No viewer responses captured (DOM fallback warnings):** the endpoint or shape changed. Open DevTools → Network in a normal browser, open your viewer list, and find the response carrying the viewer users. Add its URL fragment to `URL_PATTERNS` in `tracker/parser.py`, then run `reparse`. `data/logs/tracker.log` logs which pattern matched for every captured page.
 - **Likes not detected (no ♥ events, liker block ignored):** look in a raw capture for the per-viewer like field and add its name to `LIKE_KEYS` in `tracker/parser.py`, then run `reparse`.
 - **Story listing fails:** set `username` in `config.toml` to enable the page-sniffing fallback, and check `REELS_MEDIA_PATH` / `IG_APP_ID` in `capture.py`.
+- **"partial capture: N of M viewers":** scrolling stopped before the end of the list. Raise `max_scrolls` or `scroll_idle_seconds`. Viewers missing from one snapshot show up as new in the next, so they're missed rather than falsely flagged.
+- **"another tracker command is already running" (exit 4):** a `run` loop is active, either in another window or the scheduled task. Stop it first with `data\STOP`.
 - **Re-parsing:** every matched response is in `data/raw/` as `{"taken_at", "source", "url", "pattern", "body"}`. Fix `parser.py`, then run `python -m tracker reparse`. It rebuilds snapshots and events (stories and viewers are kept) and re-renders the report.
 - **Headless gets challenged more than headed:** set `headless = false`. A window will open briefly each cycle.
 

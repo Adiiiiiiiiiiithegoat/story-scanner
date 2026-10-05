@@ -5,6 +5,7 @@ import argparse
 import csv
 import logging
 import sys
+from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler
 
 from . import capture, config, dashboard, db, safety, scheduler, session
@@ -76,6 +77,32 @@ def cmd_reparse(cfg, args):
     return 0
 
 
+class AlreadyRunning(Exception):
+    pass
+
+
+@contextmanager
+def single_instance(cfg):
+    """OS-level lock on data/tracker.lock, released automatically even if the process is killed."""
+    cfg.data_dir.mkdir(parents=True, exist_ok=True)
+    f = open(cfg.data_dir / "tracker.lock", "a+")
+    try:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise AlreadyRunning("another tracker command is already using the browser profile (is `run` active?)")
+        yield
+    finally:
+        f.close()
+
+
+BROWSER_COMMANDS = {"login", "check", "snapshot", "run"}  # these share data/profile, so only one at a time
+
 COMMANDS = {
     "login": (cmd_login, "open a headed browser and log in manually (once)"),
     "check": (cmd_check, "verify the saved session and list live story items"),
@@ -102,7 +129,13 @@ def main(argv=None) -> int:
     for w in cfg.warnings:
         log.warning(w)
     try:
+        if args.cmd in BROWSER_COMMANDS:
+            with single_instance(cfg):
+                return COMMANDS[args.cmd][0](cfg, args) or 0
         return COMMANDS[args.cmd][0](cfg, args) or 0
+    except AlreadyRunning as e:
+        log.error("%s", e)
+        return 4
     except safety.NotLoggedIn as e:
         log.error("%s", e)
         return 3

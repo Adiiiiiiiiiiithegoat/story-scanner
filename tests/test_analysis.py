@@ -104,3 +104,20 @@ def test_new_like_kept_even_when_reshuffled():
     cur = ["n7"] + LIKERS + rest[::-1]  # non-liker block fully reversed
     res = compare(prev, cur, C, liked_prev=set(LIKERS), liked_cur=set(LIKERS) | {"n7"})
     assert res.is_reshuffle and [(e.user_id, e.liked) for e in res.events] == [("n7", True)]
+
+
+def test_several_jumpers_are_not_a_reshuffle():
+    # 5 deep viewers rewatch: everyone above their old spots shifts down 5, but the list is stable
+    prev = [f"v{i:02d}" for i in range(40)]
+    jumpers = ["v35", "v30", "v25", "v20", "v15"]
+    cur = jumpers + [u for u in prev if u not in jumpers]
+    res = compare(prev, cur, C)
+    assert not res.is_reshuffle and res.movers_fraction == 0
+    assert {e.user_id for e in res.events} == set(jumpers)
+
+
+def test_rewatch_then_new_viewers_still_in_top_zone():
+    prev = list("abcdefghijklmnopqrst")
+    cur = list("vwxyz") + ["p"] + [u for u in prev if u != "p"]  # p rewatched, then 5 first views arrived
+    res = compare(prev, cur, C)
+    assert [(e.user_id, e.new_rank) for e in res.events] == [("p", 5)]

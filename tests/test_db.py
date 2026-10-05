@@ -120,3 +120,24 @@ def test_ingest_like_data_end_to_end(conn):
     scheduler.ingest(conn, acfg, ITEM, "2026-10-05T10:30:00+00:00", cur, "api")
     ev = conn.execute("SELECT user_id, confidence, liked FROM events").fetchall()
     assert [tuple(e) for e in ev] == [("id_e", "high", 1)]
+
+
+def test_single_instance_lock(tmp_path):
+    from tracker import cli
+    cfg = Config(data_dir=tmp_path)
+    with cli.single_instance(cfg):
+        with pytest.raises(cli.AlreadyRunning):
+            with cli.single_instance(cfg):
+                pass
+    with cli.single_instance(cfg):  # released after exit
+        pass
+
+
+def test_restart_waits_for_min_interval(tmp_path, monkeypatch):
+    cfg = Config(data_dir=tmp_path)
+    c = db.connect(cfg.db_path)
+    db.insert_snapshot(c, ITEM, db.utcnow(), "api", ids("a"))
+    waits = []
+    monkeypatch.setattr(scheduler, "_sleep", lambda s, cfg: waits.append(s) or False)  # False = stop requested
+    assert scheduler.run(cfg) == 0
+    assert len(waits) == 1 and 14 * 60 < waits[0] <= 15 * 60

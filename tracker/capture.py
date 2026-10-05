@@ -256,6 +256,10 @@ def _capture_item(page, rec: Recorder, cfg, username: str, item: parser.StoryIte
     if rec.pages.get(key):
         viewers = parser.merge_pages(rec.pages[key])
         log.info("  captured %d viewers from %d response(s)", len(viewers), len(rec.pages[key]))
+        total = max((p.total or 0 for p in rec.pages[key]), default=0)
+        if total and len(viewers) < total:
+            log.warning("  partial capture for %s: %d of %d viewers (scroll limit or idle timeout); "
+                        "raise max_scrolls / scroll_idle_seconds if this repeats", key, len(viewers), total)
         return ItemCapture(key, taken_at, "api", viewers)
     if dom_names:
         log.warning("  no viewer JSON captured for %s; using DOM fallback (%d usernames, lower trust)", key, len(dom_names))
@@ -280,8 +284,8 @@ def run_cycle(cfg, only_check: bool = False) -> tuple[str | None, list[parser.St
         if not session.session_user_id(ctx):
             raise SafetyStop("session cookie disappeared: logged out")
         username, items = _fetch_items(page, rec, uid, cfg)
-        now = datetime.now(timezone.utc).isoformat()
-        items = [i for i in items if i.expires_at > now]
+        now = datetime.now(timezone.utc)
+        items = [i for i in items if datetime.fromisoformat(i.expires_at) > now]
         if only_check or not items:
             return username, items, []
         username = username or cfg.username

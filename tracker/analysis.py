@@ -20,9 +20,10 @@ non-liker block when like data is available:
    `reshuffle_threshold`, or more than `max_movers_fraction` of common viewers moved more than
    `mover_places` (and at least `min_movers_for_reshuffle` did), the pair is a reshuffle: the
    score is stored, the snapshot is flagged and no events are emitted.
-4. Flag rule: jump >= max(min_jump_abs, min_jump_frac * list size), lands in the top zone,
-   and was not in the top zone in the previous snapshot.
-5. Confidence: high = landed in the top `high_top`, jump >= high_jump_factor * min jump,
+4. Flag rule: jump >= max(min_jump_abs, min_jump_frac * list size), lands in the top zone
+   (counting only returning viewers above, so first-views that arrived after the rewatch don't push
+   it out), and was not in the top zone in the previous snapshot.
+5. Confidence: high = landed in the top `high_top` (same counting), jump >= high_jump_factor * min jump,
    rho >= high_min_corr and at most `high_max_up_movers` viewers jumped in this pair;
    medium = rho >= medium_min_corr; low = anything else that passed, a DOM-fallback snapshot,
    or a list too short to judge stability.
@@ -108,8 +109,11 @@ def _compare_block(prev: list[str], cur: list[str], c: AnalysisConfig, dom: bool
     stable = [u for u in common if jump[u] < min_jump]
     # ponytail: rho on fewer than 5 viewers is noise (3 viewers, one move = -0.5), so treat it as unknown
     score = spearman([prev_rank[u] for u in stable], [cur_rank[u] for u in stable]) if len(stable) >= MIN_RHO_VIEWERS else None
-    movers = sum(1 for u in common if abs(jump[u]) > c.mover_places)
-    movers_fraction = movers / len(common) if common else 0.0
+    # Movement among the stable viewers relative to each other: k jumpers going to the top push everyone
+    # they passed down by k, which is expected and must not count as a reshuffle.
+    stable_prev = {u: i for i, u in enumerate(sorted(stable, key=prev_rank.get))}
+    movers = sum(1 for i, u in enumerate(stable) if abs(stable_prev[u] - i) > c.mover_places)
+    movers_fraction = movers / len(stable) if stable else 0.0
     reshuffle = (score is not None and score < c.reshuffle_threshold) or (
         movers_fraction > c.max_movers_fraction and movers >= c.min_movers_for_reshuffle)
     result = PairResult(score, reshuffle, movers_fraction, new)
@@ -120,7 +124,8 @@ def _compare_block(prev: list[str], cur: list[str], c: AnalysisConfig, dom: bool
     where = f" within the {block} block" if block else ""
     for u in candidates:
         p, adj, r, above = moves[u]
-        if r >= zone_cur or p < zone_prev:
+        top = r - above  # rank among returning viewers: new first-views that landed above don't push them out
+        if top >= zone_cur or p < zone_prev:
             continue
         rho = "n/a" if score is None else f"{score:.2f}"
         reason = (f"moved #{p + 1} -> #{r + 1}{where} (expected #{adj + 1} after {above} new viewer(s) above); "
@@ -129,7 +134,7 @@ def _compare_block(prev: list[str], cur: list[str], c: AnalysisConfig, dom: bool
             conf, why = "low", "DOM-fallback snapshot (lower trust)"
         elif score is None:
             conf, why = "low", "too few stable viewers to judge list stability"
-        elif (r < c.high_top and jump[u] >= c.high_jump_factor * min_jump and score >= c.high_min_corr
+        elif (top < c.high_top and jump[u] >= c.high_jump_factor * min_jump and score >= c.high_min_corr
               and len(candidates) <= c.high_max_up_movers):
             conf, why = "high", "big jump to the top of an otherwise stable list"
         elif score >= c.medium_min_corr:

@@ -103,6 +103,12 @@ def _sleep(seconds: float, cfg) -> bool:
 def run(cfg) -> int:
     conn = db.connect(cfg.db_path)
     log.info("Tracker running. Create %s or press Ctrl+C to stop.", cfg.stop_file)
+    if last := db.last_snapshot_time(conn):  # restarting must not bypass the minimum interval
+        wait = MIN_INTERVAL_MINUTES * 60 - (datetime.now(timezone.utc) - last).total_seconds()
+        if wait > 0:
+            log.info("Last capture was under %d min ago; first check in %.0f min", MIN_INTERVAL_MINUTES, wait / 60)
+            if not _sleep(wait, cfg):
+                return 0
     while True:
         if safety.stop_requested(cfg):
             log.info("STOP file found, exiting.")
