@@ -9,7 +9,10 @@ def test_rest_users_array(fixture):
     page = parser.parse_viewers(body)
     assert [v.username for v in page.viewers] == ["alice", "bob", "carol"]
     assert page.viewers[0].user_id == "1001" and page.viewers[0].full_name == "Alice A"
-    assert page.viewers[0].extra["has_liked"] is True  # unknown fields kept
+    assert page.viewers[0].extra["has_liked"] is True  # merged from the parallel `viewers` list by user id
+    assert page.viewers[0].extra["emoji_reaction"] == {"unicode": "x"}
+    assert [parser.like_flag(v.extra) for v in page.viewers] == [True, False, False]
+    assert page.viewers[1].extra["is_private"] is True  # unknown user fields kept
     assert page.has_more is True and page.total == 5
 
 

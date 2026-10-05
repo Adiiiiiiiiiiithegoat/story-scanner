@@ -142,7 +142,28 @@ def parse_viewers(body, url_pattern: str | None = None) -> ViewerPage:
     if not lists:
         return ViewerPage([], _has_more(body), total)
     _, best = max(lists, key=lambda pl: (bool(VIEWER_PATH_RE.search(pl[0]) or pl[0].endswith(".users")), len(pl[1])))
-    return ViewerPage([_as_viewer(el) for el in best], _has_more(body), total)
+    viewers = [_as_viewer(el) for el in best]
+    _merge_side_info(body, viewers)
+    return ViewerPage(viewers, _has_more(body), total)
+
+
+def _merge_side_info(body, viewers: list[Viewer]) -> None:
+    """REST viewer responses carry likes/reactions/replies in a parallel `viewers: [{user: {pk}, has_liked, ...}]`
+    list whose users have no username. Merge those per-viewer fields into extra, matched by user id."""
+    by_id = {v.user_id: v for v in viewers}
+    stack = [body]
+    while stack:
+        d = stack.pop()
+        if isinstance(d, dict):
+            stack.extend(d.values())
+        elif isinstance(d, list):
+            for el in d:
+                user = el.get("user") if isinstance(el, dict) else None
+                uid = str(user.get("pk") or user.get("id") or "") if isinstance(user, dict) else ""
+                if uid in by_id:
+                    by_id[uid].extra.update({k: v for k, v in el.items() if k != "user"})
+                else:
+                    stack.append(el)
 
 
 def merge_pages(pages: list[ViewerPage]) -> list[Viewer]:

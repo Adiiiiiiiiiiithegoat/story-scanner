@@ -103,6 +103,9 @@ def main(argv=None) -> int:
         log.warning(w)
     try:
         return COMMANDS[args.cmd][0](cfg, args) or 0
+    except safety.NotLoggedIn as e:
+        log.error("%s", e)
+        return 3
     except safety.SafetyStop as e:
         log.error("SAFETY STOP: %s", e)
         log.error("Tracker stopped. Open Instagram in a normal browser and resolve this by hand before running again.")

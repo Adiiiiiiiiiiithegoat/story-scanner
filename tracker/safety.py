@@ -14,6 +14,10 @@ class SafetyStop(Exception):
     """Logged out, challenge, checkpoint or rate limit. Resolve manually in a normal browser."""
 
 
+class NotLoggedIn(SafetyStop):
+    """No saved session at all (nothing was sent to Instagram). Exit code 3: run `login`."""
+
+
 BAD_PATH_RE = re.compile(r"^/(challenge|checkpoint|accounts/login|accounts/suspended|accounts/disabled|suspended)", re.I)
 BAD_JSON_RE = re.compile(
     r"challenge_required|checkpoint_required|login_required|feedback_required|consent_required"

@@ -270,7 +270,7 @@ def run_cycle(cfg, only_check: bool = False) -> tuple[str | None, list[parser.St
     with session.open_context(cfg) as ctx:
         uid = session.session_user_id(ctx)
         if not uid:
-            raise SafetyStop("not logged in: run `python -m tracker login`")
+            raise safety.NotLoggedIn("no saved session: run `python -m tracker login`")
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         rec = Recorder(cfg)
         page.on("response", rec.on_response)

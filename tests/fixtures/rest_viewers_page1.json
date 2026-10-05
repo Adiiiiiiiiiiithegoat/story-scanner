@@ -1,9 +1,15 @@
 {
   "users": [
-    {"pk": "1001", "pk_id": "1001", "username": "alice", "full_name": "Alice A", "is_private": false, "profile_pic_url": "https://example.invalid/a.jpg", "has_liked": true},
+    {"pk": "1001", "pk_id": "1001", "username": "alice", "full_name": "Alice A", "is_private": false, "profile_pic_url": "https://example.invalid/a.jpg"},
     {"pk": "1002", "pk_id": "1002", "username": "bob", "full_name": "Bob B", "is_private": true, "profile_pic_url": "https://example.invalid/b.jpg"},
     {"pk": "1003", "pk_id": "1003", "username": "carol", "full_name": "", "is_private": false, "profile_pic_url": "https://example.invalid/c.jpg"}
   ],
+  "viewers": [
+    {"user": {"pk": "1001", "pk_id": "1001", "id": "1001"}, "has_liked": true, "emoji_reaction": {"unicode": "x"}, "reply_text": "", "is_spam_viewer": false},
+    {"user": {"pk": "1002", "pk_id": "1002", "id": "1002"}, "has_liked": false, "reply_text": "", "is_spam_viewer": false},
+    {"user": {"pk": "1003", "pk_id": "1003", "id": "1003"}, "has_liked": false, "reply_text": "", "is_spam_viewer": false}
+  ],
+  "reactions": [],
   "next_max_id": "QVFE_next_cursor",
   "user_count": 5,
   "total_viewer_count": 5,
