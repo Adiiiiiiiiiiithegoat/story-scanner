@@ -1,0 +1,39 @@
+# Story Rewatch Tracker config. Copied to config.toml on first run; edit config.toml, not this file.
+
+data_dir = "data"              # relative to the project folder: profile, db, raw captures, logs, report
+timezone = "Asia/Kolkata"      # display timezone (everything is stored in UTC)
+username = ""                  # your Instagram handle; optional, auto-detected while a story is live
+
+[schedule]
+interval_minutes = 30          # between captures while a story is live (hard floor: 15)
+jitter_minutes = 7             # +/- random jitter per cycle
+no_story_interval_minutes = 120  # re-check interval when you have no live story
+no_story_jitter_minutes = 15
+quiet_hours = ["02:00", "07:00"] # local time, no polling inside this window. [] disables
+max_retries = 3                # transient network errors per cycle before skipping it
+
+[browser]
+headless = true                # false = watch it work (also useful if Instagram dislikes headless)
+browser_channel = "chrome"     # use installed Google Chrome; "" = bundled Chromium
+max_scrolls = 40               # cap on wheel-scrolls inside the viewer sheet per story item
+scroll_idle_seconds = 5        # stop scrolling after this long with no new viewers
+timeout_seconds = 30           # page/locator timeout
+
+[analysis]
+reshuffle_threshold = 0.6      # Spearman rho below this => reshuffle, no events
+max_movers_fraction = 0.30     # ... or more than this fraction of common viewers moved > mover_places
+mover_places = 3
+min_movers_for_reshuffle = 3   # the fraction rule needs at least this many movers (protects tiny lists)
+min_jump_abs = 3               # jump must be >= max(min_jump_abs, min_jump_frac * list size)
+min_jump_frac = 0.10
+top_zone = 5                   # must land in the top N ...
+top_zone_frac = 0.10           # ... or top 10% for lists longer than top_zone_frac_above
+top_zone_frac_above = 50
+high_top = 3                   # "high" needs a landing spot in the top 3,
+high_jump_factor = 2.0         # a jump >= this * the minimum jump,
+high_min_corr = 0.85           # rho >= this,
+high_max_up_movers = 2         # and at most this many viewers jumping up in the same pair
+medium_min_corr = 0.7
+weight_high = 1.0              # rewatch score weights
+weight_medium = 0.6
+weight_low = 0.3

@@ -1,0 +1,12 @@
+{
+  "users": [
+    {"pk": "1001", "pk_id": "1001", "username": "alice", "full_name": "Alice A", "is_private": false, "profile_pic_url": "https://example.invalid/a.jpg", "has_liked": true},
+    {"pk": "1002", "pk_id": "1002", "username": "bob", "full_name": "Bob B", "is_private": true, "profile_pic_url": "https://example.invalid/b.jpg"},
+    {"pk": "1003", "pk_id": "1003", "username": "carol", "full_name": "", "is_private": false, "profile_pic_url": "https://example.invalid/c.jpg"}
+  ],
+  "next_max_id": "QVFE_next_cursor",
+  "user_count": 5,
+  "total_viewer_count": 5,
+  "updated_media": {"pk": "3500000000000000001", "user": {"pk": "42", "username": "me"}},
+  "status": "ok"
+}

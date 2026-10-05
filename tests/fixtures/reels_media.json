@@ -1,0 +1,17 @@
+{
+  "reels": {
+    "42": {
+      "id": "42",
+      "user": {"pk": "42", "username": "me", "full_name": "Me"},
+      "items": [
+        {"pk": "3500000000000000001", "id": "3500000000000000001_42", "taken_at": 1790000000, "expiring_at": 1790086400, "media_type": 1, "viewer_count": 5,
+         "user": {"pk": "42", "username": "me"},
+         "viewers": [{"pk": "1001", "username": "alice"}]},
+        {"pk": "3500000000000000002", "id": "3500000000000000002_42", "taken_at": 1790003600, "media_type": 2, "total_viewer_count": 3,
+         "user": {"pk": "42", "username": "me"}}
+      ]
+    }
+  },
+  "reels_media": [],
+  "status": "ok"
+}

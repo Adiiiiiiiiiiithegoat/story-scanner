@@ -1,0 +1,39 @@
+{
+  "_comment": "prev/cur are viewer lists top-first. expect.events lists [user, confidence] pairs.",
+  "stable_one_jump": {
+    "prev": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t"],
+    "cur":  ["p","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","q","r","s","t"],
+    "expect": {"reshuffle": false, "events": [["p", "high"]]}
+  },
+  "jump_with_new_viewers": {
+    "prev": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t"],
+    "cur":  ["x","y","p","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","q","r","s","t"],
+    "expect": {"reshuffle": false, "events": [["p", "high"]]}
+  },
+  "push_down": {
+    "prev": ["a","b","c","d","e","f","g","h","i","j"],
+    "cur":  ["x","y","z","a","b","c","d","e","f","g","h","i","j"],
+    "expect": {"reshuffle": false, "events": []}
+  },
+  "full_reshuffle": {
+    "prev": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t"],
+    "cur":  ["k","d","r","a","t","g","o","b","m","s","e","q","h","c","p","j","f","n","l","i"],
+    "expect": {"reshuffle": true, "events": []}
+  },
+  "small_list": {
+    "prev": ["a","b","c","d","e","f"],
+    "cur":  ["f","a","b","c","d","e"],
+    "expect": {"reshuffle": false, "events": [["f", "medium"]]}
+  },
+  "tiny_list": {
+    "prev": ["a","b","c"],
+    "cur":  ["c","a","b"],
+    "expect": {"reshuffle": false, "events": []}
+  },
+  "dom_fallback": {
+    "dom": true,
+    "prev": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t"],
+    "cur":  ["p","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","q","r","s","t"],
+    "expect": {"reshuffle": false, "events": [["p", "low"]]}
+  }
+}

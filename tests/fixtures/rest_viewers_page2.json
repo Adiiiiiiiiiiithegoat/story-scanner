@@ -1,0 +1,10 @@
+{
+  "users": [
+    {"pk": "1003", "pk_id": "1003", "username": "carol", "full_name": ""},
+    {"pk": "1004", "pk_id": "1004", "username": "dave", "full_name": "Dave D"},
+    {"pk": "1005", "pk_id": "1005", "username": "erin", "full_name": "Erin E"}
+  ],
+  "next_max_id": null,
+  "user_count": 5,
+  "status": "ok"
+}

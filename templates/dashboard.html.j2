@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Story Rewatch Tracker</title>
+<style>
+:root{--bg:#f6f6f8;--card:#fff;--fg:#1c1c21;--muted:#6a6a74;--line:#e2e2e8;--accent:#c13584;--high:#c0392b;--medium:#c27c0e;--low:#7d878a;--grey:#c4c4cc}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--card:#1b1b21;--fg:#ececf1;--muted:#9b9ba6;--line:#2d2d36;--accent:#e1306c;--high:#ff6f61;--medium:#f2b14a;--low:#a3abae;--grey:#4f4f5a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 12px}h2{font-size:1.1rem;margin:0 0 8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+.stat b{display:block;font-size:1.15rem}.stat span{color:var(--muted);font-size:.8rem}
+.banner{background:var(--card);border-left:4px solid var(--accent);border-radius:6px;padding:10px 12px;margin:14px 0}
+section.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px 0}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:8px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{cursor:pointer;user-select:none;color:var(--muted);font-weight:600}
+th.asc::after{content:" ▲"}th.desc::after{content:" ▼"}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr.row{cursor:pointer}tbody tr.row:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+tr.detail td{white-space:normal;background:color-mix(in srgb,var(--fg) 3%,transparent)}
+.c-high{color:var(--high);font-weight:600}.c-medium{color:var(--medium);font-weight:600}.c-low{color:var(--low)}
+.badge{display:inline-block;padding:0 6px;border-radius:8px;border:1px solid currentColor;font-size:.75rem}
+svg.chart{width:100%;max-width:640px;height:auto;display:block}
+svg .grid{stroke:var(--line)}svg .ax{fill:var(--muted);font-size:11px}
+svg .ln{fill:none;stroke:var(--accent);stroke-width:2}
+svg .pt{fill:var(--accent)}svg .pt.rs{fill:var(--grey)}
+svg .ev{fill:none;stroke-width:2}
+ul.ev{margin:6px 0 0;padding-left:18px}ul.ev li{margin:3px 0}
+.empty{color:var(--muted)}
+select{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+</style>
+</head>
+<body>
+<main>
+<h1>Story Rewatch Tracker</h1>
+<div class="stats" id="stats"></div>
+<p class="banner">Rewatch counts are estimates based on list movement; Instagram doesn't report real rewatches. Every flag below is a <b>possible rewatch</b> with a confidence level.</p>
+<section class="card">
+  <h2>All-stories leaderboard</h2>
+  <div class="meta">Possible rewatches summed over every tracked story. Show
+    <select id="range"><option value="7">last 7 days</option><option value="30">last 30 days</option><option value="0" selected>all time</option></select>
+  </div>
+  <div class="tw" id="lb"></div>
+</section>
+<div id="stories"></div>
+</main>
+<script type="application/json" id="data">{{ data_json|safe }}</script>
+<script>
+(function () {
+  "use strict";
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+    }
+    for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : String(k));
+    return e;
+  }
+  function svgEl(tag, attrs, text) {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  const rank = r => (r == null ? "–" : "#" + (r + 1));
+
+  // Header
+  const S = D.stats;
+  document.getElementById("stats").append(...[
+    [D.generated, "Last updated"], [S.active, "Active stories"], [S.viewers, "Unique viewers"],
+    [S.snapshots, "Snapshots"], [S.reshuffles, "Skipped as reshuffle"],
+  ].map(([v, k]) => el("div", {class: "stat"}, el("b", null, v), el("span", null, k))));
+
+  // Sortable table. cols: {key, label, num, asc, fmt}. detail(row) -> Node for click-to-expand.
+  function table(cols, rows, sortKey, detail) {
+    let key = sortKey, dir = -1;
+    const thead = el("thead"), tbody = el("tbody");
+    function draw() {
+      thead.replaceChildren(el("tr", null, cols.map(c => el("th", {
+        class: (c.num ? "n " : "") + (c.key === key ? (dir < 0 ? "desc" : "asc") : ""),
+        onclick: () => { if (key === c.key) dir = -dir; else { key = c.key; dir = c.asc || !c.num ? 1 : -1; } draw(); },
+      }, c.label))));
+      const sorted = rows.slice().sort((a, b) => {
+        const x = a[key], y = b[key];
+        if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+        return (x < y ? -1 : x > y ? 1 : 0) * dir;
+      });
+      tbody.replaceChildren(...sorted.map(r => {
+        const tr = el("tr", {class: detail ? "row" : ""}, cols.map(c => {
+          const v = c.fmt ? c.fmt(r) : r[c.key];
+          return el("td", {class: c.num ? "n" : ""}, v instanceof Node ? v : String(v));
+        }));
+        if (detail) tr.addEventListener("click", () => {
+          const nx = tr.nextElementSibling;
+          if (nx && nx.classList.contains("detail")) { nx.remove(); return; }
+          tr.after(el("tr", {class: "detail"}, el("td", {colspan: cols.length}, detail(r))));
+        });
+        return tr;
+      }));
+    }
+    draw();
+    return el("table", null, thead, tbody);
+  }
+  const conf = (n, c) => (n ? el("span", {class: "c-" + c}, n) : "0");
+  const countCols = [
+    {key: "high", label: "High", num: true, fmt: r => conf(r.high, "high")},
+    {key: "medium", label: "Med", num: true, fmt: r => conf(r.medium, "medium")},
+    {key: "low", label: "Low", num: true, fmt: r => conf(r.low, "low")},
+    {key: "score", label: "Rewatch score", num: true, fmt: r => r.score.toFixed(1)},
+  ];
+
+  // Rank-over-time line. Reshuffle snapshots are grey; possible-rewatch points get a coloured ring.
+  function chart(story, v) {
+    const W = 640, H = 170, L = 44, R = 14, T = 12, B = 28, snaps = story.snapshots, n = snaps.length;
+    const vals = v.series.filter(r => r != null), maxR = Math.max(1, ...vals);
+    const t0 = snaps[0].ts, span = (snaps[n - 1].ts - t0) || 1;
+    const x = i => (n < 2 ? (L + W - R) / 2 : L + (snaps[i].ts - t0) / span * (W - L - R));
+    const y = r => T + r / maxR * (H - T - B);
+    const svg = svgEl("svg", {viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "Rank over time for " + v.username});
+    for (const r of [0, maxR]) {
+      svg.append(svgEl("line", {x1: L, x2: W - R, y1: y(r), y2: y(r), class: "grid"}));
+      svg.append(svgEl("text", {x: L - 6, y: y(r) + 4, "text-anchor": "end", class: "ax"}, "#" + (r + 1)));
+    }
+    svg.append(svgEl("text", {x: L, y: H - 8, class: "ax"}, snaps[0].t));
+    if (n > 1) svg.append(svgEl("text", {x: W - R, y: H - 8, "text-anchor": "end", class: "ax"}, snaps[n - 1].t));
+    const pts = v.series.map((r, i) => (r == null ? null : {i, r})).filter(Boolean);
+    svg.append(svgEl("path", {class: "ln", d: pts.map((p, k) => (k ? "L" : "M") + x(p.i).toFixed(1) + "," + y(p.r).toFixed(1)).join("")}));
+    const evAt = new Map(v.events.map(e => [e.i, e.confidence]));
+    for (const p of pts) {
+      const s = snaps[p.i];
+      const c = svgEl("circle", {cx: x(p.i), cy: y(p.r), r: 3.5, class: "pt" + (s.reshuffle ? " rs" : "")});
+      c.append(svgEl("title", {}, `${s.t}: ${rank(p.r)}${s.reshuffle ? " (reshuffle, ignored)" : ""}${s.source === "dom" ? " (DOM fallback)" : ""}`));
+      svg.append(c);
+      if (evAt.has(p.i)) svg.append(svgEl("circle", {cx: x(p.i), cy: y(p.r), r: 7, class: "ev", stroke: `var(--${evAt.get(p.i)})`}));
+    }
+    return svg;
+  }
+  function viewerDetail(story) {
+    return v => el("div", null, chart(story, v), v.events.length
+      ? el("ul", {class: "ev"}, v.events.map(e => el("li", null, el("span", {class: "badge c-" + e.confidence}, e.confidence), " ", e.t, ": ", e.reason)))
+      : el("div", {class: "empty"}, "No possible rewatches flagged."));
+  }
+
+  // Per-story sections
+  const host = document.getElementById("stories");
+  if (!D.stories.length) host.append(el("section", {class: "card"}, el("p", {class: "empty"}, "No snapshots yet. Run `python -m tracker snapshot` while a story is live.")));
+  D.stories.forEach(st => {
+    const rs = st.snapshots.filter(s => s.reshuffle).length;
+    host.append(el("section", {class: "card"},
+      el("h2", null, `Story item ${st.id}`),
+      el("div", {class: "meta"}, `${st.media_type || "story"} · posted ${st.posted} · ${st.active ? "live until " + st.expires : "expired"} · ${st.snapshots.length} snapshots (${rs} reshuffle) · ${st.viewers.length} viewers · click a row for rank history`),
+      el("div", {class: "tw"}, table([
+        {key: "username", label: "Viewer", asc: true},
+        {key: "first_seen_ts", label: "First seen", num: true, asc: true, fmt: r => r.first_seen},
+        {key: "latest_rank", label: "Latest", num: true, asc: true, fmt: r => rank(r.latest_rank)},
+        {key: "best_rank", label: "Best", num: true, asc: true, fmt: r => rank(r.best_rank)},
+        ...countCols,
+      ], st.viewers, "score", viewerDetail(st)))));
+  });
+
+  // Leaderboard
+  const range = document.getElementById("range"), lb = document.getElementById("lb");
+  function drawLB() {
+    const days = +range.value, cutoff = days ? Date.now() - days * 864e5 : -Infinity, agg = {};
+    for (const st of D.stories) {
+      if ((st.posted_ts ?? 0) < cutoff) continue;
+      for (const v of st.viewers) {
+        const a = agg[v.user_id] ||= {username: D.names[v.user_id] || v.username, stories: 0, high: 0, medium: 0, low: 0, score: 0};
+        a.stories++; a.high += v.high; a.medium += v.medium; a.low += v.low; a.score += v.score;
+      }
+    }
+    const rows = Object.values(agg);
+    lb.replaceChildren(rows.length ? table([
+      {key: "username", label: "Viewer", asc: true},
+      {key: "stories", label: "Stories seen", num: true},
+      ...countCols,
+    ], rows, "score") : el("p", {class: "empty"}, "Nothing in this range."));
+  }
+  range.addEventListener("change", drawLB);
+  drawLB();
+})();
+</script>
+</body>
+</html>

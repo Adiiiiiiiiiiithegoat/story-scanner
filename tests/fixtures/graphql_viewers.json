@@ -1,0 +1,13 @@
+{
+  "data": {
+    "xdt_api__v1__media__list_reel_media_viewer": {
+      "edges": [
+        {"node": {"user": {"pk": "2001", "id": "2001", "username": "zed", "full_name": "Zed Z"}, "has_liked": true, "reaction": "fire"}},
+        {"node": {"user": {"pk": "2002", "id": "2002", "username": "yara", "full_name": "Yara Y"}, "has_liked": false}}
+      ],
+      "page_info": {"has_next_page": false, "end_cursor": null},
+      "total_viewer_count": 2
+    }
+  },
+  "extensions": {"is_final": true}
+}
